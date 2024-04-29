@@ -62,7 +62,10 @@ def show_prediction(learner: InputPath(), DIR_IMGS: str = '', DIR_MASKS: str = '
         learn.load(model_file)
     plot = learn.show_results(max_n=4, figsize=[12,6], vmin=0, vmax=1, cmap=colormap())
     print(plot)
+    print(type(plot))
+    print(dir(plot))
     
+     
     
 def train_unet(learner: OutputPath(), DIR_IMGS: str = '', DIR_MASKS: str = '', CODES: list = [], IMG_SIZE: int = 256, BATCH_SIZE: int = 16, NUM_WORKERS: int = 0, LR: float = 0.01, EPOCHS: int = 10):
     
@@ -71,6 +74,11 @@ def train_unet(learner: OutputPath(), DIR_IMGS: str = '', DIR_MASKS: str = '', C
     import torchvision.models as models
     import numpy as np
     import torch
+    import mlflow
+   
+    # MlFlow setup
+    mlflow.tracking.set_tracking_uri('http://mlflow-server:5000')
+    experiment = mlflow.set_experiment("fastai-brain-mri") 
     
     def accuracy(pred, target):
         target = target.squeeze(1)
@@ -116,15 +124,20 @@ def train_unet(learner: OutputPath(), DIR_IMGS: str = '', DIR_MASKS: str = '', C
     learn = unet_learner(dl, MODEL_BACKBONE, n_in=3, n_out=1, lr=LR, loss_func=BCEWithLogitsLossFlat(), metrics=[accuracy, dice, IoU])
     lrs = slice(LR/400, LR/4)
     learn.unfreeze()
-    
-    learn.fit_one_cycle(EPOCHS, lrs, cbs=[ShowGraphCallback(), CSVLogger()])
+   
+   
+    mlflow.fastai.autolog()
 
-    with open(learner.path, 'wb') as model_file:
+    # Start MLflow session
+    with mlflow.start_run() as run: 
+        learn.fit_one_cycle(EPOCHS, lrs, cbs=[ShowGraphCallback(), CSVLogger()])
+
+    with open(learner, 'wb') as model_file:
         learn.save(model_file)
 
 train_op = create_component_from_func(
     func=train_unet,
-    packages_to_install=['fastai', 'pydantic==1.10.9'],
+    packages_to_install=['fastai', 'pydantic==1.10.9', 'mlflow'],
     base_image='ultralytics/ultralytics')
 
 show_prediction_op = create_component_from_func(
