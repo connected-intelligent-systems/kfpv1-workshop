@@ -380,7 +380,8 @@ def image_segmentation(
     )
 
 if __name__ == '__main__':
-    from kfp_helper.pipeline_handling import kfphelpers
-    helper = kfphelpers(dotenv_path='/mnt/c/Users/seho04/Documents/FSNEXT/Dataspace/Kubeflow/.env', pl_name='pytorch_unet')
+    from kfpv1helper import kfphelpers
+    
+    helper = kfphelpers(namespace="workshop", pl_name='pytorch_unet')
     helper.upload_pipeline(pipeline_function=image_segmentation)
     #helper.create_run(pipeline_function=image_segmentation) 

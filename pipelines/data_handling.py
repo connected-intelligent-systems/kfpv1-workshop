@@ -68,8 +68,7 @@ def test_pipeline(
 
 if __name__ == '__main__':
     
-    sys.path.append('./helpers')
-    from deploykf_helper import kfphelpers
+    from kfpv1helper import kfphelpers
     
     helper = kfphelpers(namespace='workshop', pl_name='ecample')
     #helper.upload_pipeline(pipeline_function=yolo_object_detection)

@@ -196,9 +196,7 @@ def yolo_object_detection(
 
 
 if __name__ == '__main__':
-    import sys
-    sys.path.append('./helpers')
-    from deploykf_helper import kfphelpers
+    from kfpv1helper import kfphelpers
     
     helper = kfphelpers(namespace='workshop', pl_name='yolo')
     #helper.upload_pipeline(pipeline_function=yolo_object_detection)

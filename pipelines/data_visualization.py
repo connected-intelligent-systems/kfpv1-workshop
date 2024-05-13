@@ -143,9 +143,7 @@ def data_visualization(
 Pipeline creation
 '''
 if __name__ == '__main__':
-    import sys
-    sys.path.append('./helpers')
-    from deploykf_helper import kfphelpers
+    from kfpv1helper import kfphelpers
     
     helper = kfphelpers(namespace='workshop', pl_name='data_viz')
     #helper.upload_pipeline(pipeline_function=yolo_object_detection)

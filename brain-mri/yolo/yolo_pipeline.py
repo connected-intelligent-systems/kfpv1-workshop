@@ -10,7 +10,7 @@ Train defined yolo model on chosen dataset
 '''
 def yolo_train(model: str = 'yolov8n-seg.pt',
                data: str = 'coco128-seg.yaml',
-               epochs: int = 3,
+               epochs: int = 5,
                save_path: str ='/usr/example-pipeline-volume/yolo',
                imgsz: int = 640,
                batch_size: int = 8,
@@ -27,8 +27,9 @@ def yolo_train(model: str = 'yolov8n-seg.pt',
     import os
     from pathlib import Path
     import shutil
-     
+    
     os.environ['MLFLOW_TRACKING_URI'] = 'http://mlflow-server:5000'
+    os.environ['MLFLOW_REGISTRY_URI'] = 'http://mlflow-server:5000'
     os.environ['MLFLOW_EXPERIMENT_NAME'] = mlflow_experiment_name
     import mlflow
     
@@ -41,7 +42,7 @@ def yolo_train(model: str = 'yolov8n-seg.pt',
 
     # Define paths for serving
     triton_repo_path = Path(save_path) / 'triton_repo'
-    triton_model_path = triton_repo_path / 'digit-detector'
+    triton_model_path = triton_repo_path / 'brain-mri'
 
     # Create directories
     (triton_model_path / '1').mkdir(parents=True, exist_ok=True)
@@ -52,7 +53,7 @@ def yolo_train(model: str = 'yolov8n-seg.pt',
     (triton_model_path / 'config.pbtxt').touch()
     # write to config file
     with open(triton_model_path / 'config.pbtxt', 'w') as f:
-        f.write('''name: "digit-detector"
+        f.write('''name: "brain-mri"
                     platform: "onnxruntime_onnx"
                     max_batch_size: 0
                     input [
@@ -143,9 +144,12 @@ def kserve_scv(model: str,
     from kserve import V1beta1PredictorSpec
     from kserve import V1beta1ONNXRuntimeSpec
        
+    
     model_path = model 
 
-    model = 'pvc://%s' % pvc_name + '/' + model_path
+    model = 'pvc://%s' % pvc_name + model_path 
+  
+    print(model)
    
     namespace = utils.get_default_target_namespace()
    
@@ -199,7 +203,7 @@ serve_op = create_component_from_func(
 def yolo_object_detection(
     model: str = 'yolov8n-seg.yaml',
     data: str = '/usr/volume/yolo/datasets/mri_brain.yaml',
-    epochs: int = 5,
+    epochs: int = 6,
     num_gpus: int = 1,
     pvc_id: str = 'pvc-c5114187-c911-4263-8caf-30415bd0ad79',
     pvc_name: str = 'brain-mri-volume',
@@ -235,9 +239,7 @@ def yolo_object_detection(
 
 
 if __name__ == '__main__':
-    import sys
-    sys.path.append('./helpers')
-    from deploykf_helper import kfphelpers
+    from kfpv1helper import kfphelpers
     
     helper = kfphelpers(namespace='workshop', pl_name='yolo')
     #helper.upload_pipeline(pipeline_function=yolo_object_detection)

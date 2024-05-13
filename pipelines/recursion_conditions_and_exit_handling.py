@@ -81,10 +81,7 @@ def recursion_conditions_and_exit_handlers(number: int = 20):
 
 
 if __name__ == '__main__':
-    import sys
-
-    sys.path.append('./helpers')
-    from deploykf_helper import kfphelpers
+    from kfpv1helper import kfphelpers
     
     helper = kfphelpers(namespace='workshop', pl_name='recursion')
     #helper.upload_pipeline(pipeline_function=yolo_object_detection)

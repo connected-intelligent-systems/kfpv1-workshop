@@ -78,6 +78,7 @@ def train_unet(learner: OutputPath(), DIR_IMGS: str = '', DIR_MASKS: str = '', C
    
     # MlFlow setup
     mlflow.tracking.set_tracking_uri('http://mlflow-server:5000')
+    mlflow.set_registry_uri('http://mlflow-server:5000')
     experiment = mlflow.set_experiment("fastai-brain-mri") 
     
     def accuracy(pred, target):
@@ -175,9 +176,7 @@ def fastai(
     
     
 if __name__ == '__main__':
-    import sys
-    sys.path.append('./helpers')
-    from deploykf_helper import kfphelpers
+    from kfpv1helper import kfphelpers
     
     helper = kfphelpers(namespace='workshop', pl_name='fastai')
     #helper.upload_pipeline(pipeline_function=yolo_object_detection)
