@@ -8,7 +8,8 @@ hide_table_of_contents: true
 # Prerequisites
 - some python experience
 - clone or fork this repository
-- Install `kfp` in your python environment: `pip install kfp`
+- Install `kfp` in your python environment: `pip install kfp==1.8.22`
+- *optional* : Install the kfpv1helper package to run pipelines remotely: `pip install 'git+https://github.com/sebh96/kfpv1helpers.git'`
 
 # Writing and compiling basic python-function-based components and pipelines and passing data between components
 1. As a starting point to learn more about Kubeflow pipelines we first showcase a simple pipeline setup that multiplies a user input and passes its result to a text file. For this step open **~/src/components/data_handling.py**.
@@ -35,58 +36,18 @@ This section how to directly interact with the Kubeflow Web API for a simpler an
 
 ## Uploading and deleting pipelines and pipeline versions
 ### Uploading a pipeline
-1. For this step open the file **~/src/api_controls/upload_and_run.py**. To run this file correctly it is necessary to create a file called **.env** in the folder of the script (**~/src/api_controls**). Paste the following text into the file and set the variables for your namespace, user and password.
-```python
-KFP_ENDPOINT='https://kubeflow.foresight-next.plaiful.org/pipeline'
-KFP_NAMESPACE=<your kubeflow namespace>
-
-KUBE_USER=<your kubeflow user name>
-KUBE_PW=<your passwd>
-```
-
-2. The script is structured in a few functions to handle uploading and running your pipeline. We first take a look at the `main`-function to understand the process. The function starts by creating a path (/and folder) folder for the pipeline manifest(*your_pipeline.yaml*), so we can pass the *path* in later steps. After that we pass this path and the pipeline function (imported from **~/src/components/example_pipelines.py**) to the compiler, to compile the *your_pipeline.yaml* to the chosen manifest path:
-´´`
-kfp.compiler.Compiler().compile(pipeline_func=data_visualization, package_path=pl_package)
-`´´
-<br/><br/>
-3. In the next step we need to connect to the web service of our Kubeflow cluster. Here we load the content of the in step 1. created *.env* file into the environment variables and pass it to the kfp.Client() class:
-```python
-client = kfp.Client(host=kfp_endpoint, existing_token=get_access_token(), namespace=kfp_namespace)
-```
-The `get_access_token()`-function requests an access token using your username and password from the *.env*-file
-<br/><br/>
-
-4. At this point we are ready to upload the pipeline to the Kubeflow cluster. For this we simply pass the `client` to the `pipeline_upload()`-function. The ´pipeline_upload()´-function will check if the pipeline already exists in the Kubeflow cluster, because it is not possible to upload multiple pipelines with the same name. To allow multiple versions of one pipeline(*with the same name*), it is necessary to upload it as a **new pipeline verion**. <br/><br/> If the pipeline does not exist yet, we use `client.upload_pipeline(pipeline_package_path=pl_package, pipeline_name=PL_NAME)`, where we pass the path of the *your_pipeline.yaml* `pl_package` and the name of the pipeline `PL_NAME`. If a pipeline with that exact name already exists we use `client.upload_pipeline_version(pipeline_package_path=pl_package, pipeline_name=PL_NAME, pipeline_version_name=PL_NAME+version)`, where we also pass a `pipeline_version_name`-parameter. This example script uses the number of already existing versions of the requested pipeline to determine the name(/number) of the pipeline_version that will be uploaded.
-
 
 ## Creating experiments and starting runs
-The next step in the `main`-function is create a experiment for the  pipeline and run it.
-<br/><br/>
-1. For this we need to set the name of the experiment `experiment_name` and the parameters for the run `run_parameters`. The run parameters need to fit the pipeline we are using and will be passed as a dictionary, along with the experiment name and path of the *your_pipeline.yaml* to the `run_pipeline`-function. 
-<br/><br/>
-2. The `run_pipeline`-function will first check if the experiment we want to use already exists, by looping over the existing experiment list in the `get_exp_id`-function and if it does will save it into `exp_id`-variable. If it does not exist it will create a new experiment and save its id.
-<br/><br/>
-3. After fetching/creating the experiment, we use the `client.run_pipeline()`-function and pass it the path of *your_pipeline.yaml*, the experiment_id `exp_id`, the run parameters `run_params` and the name of the job `job_name`(consisting of the name of the pipeline and the current time and date) to upload the run to the Kubeflow cluster. 
->**⚠ WARNING** : Creating a run this way will use the pipeline defined by *your_pipeline.yaml*-file. Not the (eventually) existing pipeline on the cluster.
 
 # Modifying tasks
 ## Mounting volumes, structuring pipelines and data visualization
 This section will showcase how to mount a volume to a pipeline component and visualize some example data retrieved from the volume.
-<br/><br/>
-1. For this step we will use a different pipeline function. Change the `pipeline_func` (*line 97*) in the **~/src/api_controls/upload_and_run.py** to  
-```
-kfp.compiler.Compiler().compile(pipeline_func=data_visualization, package_path=pl_package)
-```
 
-* We also need to change the run parametes `run_params` accordingly. Just comment the `run_params` for the `data_handling`-example and uncomment the `run_params` with the empty dictionary. The default parameters are defined in the pipeline functions itself.
+2. Open the file **~/src/pipelines/data_visualization.py**. For this example we are only interested in the `data_visualization()`-function and its underlying components.
 <br/><br/>
 
-2. Open the file **~/src/pipelines/example_pipelines.py**. Here are all pipeline function defined that are used in this Tutorial. You should be already familiar with the basic structure of such a function from the first section(*Writing and compiling basic python-function-based components..*). For this example we are only interested in the `data_visualization()`-function and its underlying components.
-<br/><br/>
-
-3. In the `data_visualization()`-function we apply a **RAW_DATA_VOLUME** to our tasks `..._task.apply(RAW_VOLUME_MOUNT)`. This volume is defined in **~/src/api_controls/volume_mount.py**. Volumes have to be created for each kubeflow namespace, so we need to create a new volume in the web UI. In the web ui choose the **Volumes**-segment and create a new volume.
+3. In the `data_visualization()`-function we apply a **RAW_DATA_VOLUME** to our tasks `..._task.apply(RAW_VOLUME_MOUNT)`. For this we need to get the *pvc_name* and the *volume-name* from the Kubeflow Volume Interface and set the *volume_mount_path* according to our given paths. Volumes have to be created for each kubeflow namespace, so we need to create a new volume in the web UI. In the web ui choose the **Volumes**-segment and create a new volume.
 ![alt text](images/create_volume.png)
-After the volume is mounted click on it and copy the *volume name*. Open **~/src/api_controls/volume_mount.py** and insert the *volume name* in `RAW_DATA_VOL` and the name of the volume you have chosen yourself in `RAW_DATA_PVC`. For the mounting point we use `/usr/share/example-pipeline-volume`, keep in mind that you need to change your InputPaths accordingly if you want to change it.
 <br/><br/>
 
 4. Now we need to get the example data for the pipeline to the volume. At this point we need to take a look into the pipeline itself. First we take a look at the pipeline components in **~/src/components/data_visualzaion.py**. Here we have the following components:
@@ -145,19 +106,3 @@ To change the name of any task/component in a pipeline, you can set: *component*
 1. In the web ui of Kubeflow -- Got to the Tensorboard section and click `+ New TensorBoard`. 
 
 2. Choose a name for your TensorBoard and configure it to use the volume(*PVC*) where you save the TensorBoard files/results for your pipeline runs. For the `mount_path` choose the exact directory containing the TensorBoard files on the volume.
-
-3. **TBD**
-
-
-# Uploading images to harbor
-
-1. Make sure you have access to [Harbor](https://harbor.foresight-next.plaiful.org). Choose *Login via OIDC Provider* and sign in with you Keycloak credentials(the same as for Kubeflow etc.).
-
-2. In the web UI got to the *Projects*-section, click *+ New Project*, choose a name and create a new project. Navigate to your newly created repository download the *registry certificate*. Add the certificate to the corresponding folder for your local container management solution (for podman the file should be added here: `\etc\containers\certs.d\harbor.foresight-next.plaiful.org\YOUR_CERTIFICATE.crt`).
-
-3. You can find the user information for the client in the top right of the web UI under *User Profile*. Use the Username and the CLI secret to login to Harbor from your client (e.g. `docker login https://harbor.foresight-next.plaiful.org`,`podman login https://harbor.foresight-next.plaiful.org`,...). 
-
-4. Now you are able to access Harbor from your container management solution. You can find a few examples for some containering solutions on how to push an image in your project folder under *Push Command* (e.g. `docker push *YOUR_IMAGE_ID* harbor.foresight-next.plaiful.org/YOUR_REPOSITORY/REPOSITORY[:TAG]`). 
-
-5. After the uploading process is done you should find your image in your harbor repository. To use the image for a Kubeflow pipeline component use the FULL LINK of the image (e.g. *harbor.foresight-next.plaiful.org/YOUR_REPOSITORY/REPOSITORY[:TAG]*). **TBD**
-
