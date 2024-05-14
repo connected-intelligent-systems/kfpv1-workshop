@@ -227,9 +227,6 @@ def yolo_object_detection(
     yolo_train_task = train_op(model=model,data=data,epochs=epochs,save_path=save_path,imgsz=image_size,batch_size=batch_size,mosaic=mosaic,scale=scale,patience=patience,lr0=initial_learning_rate,lrf=final_learning_rate,optimizer=optimizer,warmup_epochs=warmup_epochs,mlflow_experiment_name=mlflow_experiment_name
                                  ).apply(RAW_VOLUME_MOUNT).set_gpu_limit(1)
     
-    print(dir(yolo_train_task.outputs["onnx"]))
-    print(yolo_train_task.outputs["onnx"].value)
-    
     yolo_validation = predict_op(chkpt_path=yolo_train_task.outputs["model_path"], save_path=save_path).apply(RAW_VOLUME_MOUNT)
    
     serving_task = serve_op(model=yolo_train_task.outputs["onnx"], pvc_name=pvc_name).apply(RAW_VOLUME_MOUNT)

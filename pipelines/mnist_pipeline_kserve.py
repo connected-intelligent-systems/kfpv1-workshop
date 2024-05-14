@@ -75,6 +75,8 @@ def train(trained_model: OutputPath(),
     import mpld3
     import json
     from minio import Minio
+    import glob
+    import os
     
     # MlFlow setup
     mlflow.tracking.set_tracking_uri('http://mlflow-server:5000')
@@ -118,43 +120,7 @@ def train(trained_model: OutputPath(),
     
     html_output = plot_acc_and_loss(history)
     
-    # save model
-    with open(trained_model, 'wb') as model_file:
-        pickle.dump(model, model_file)
-    
-    minio_client = Minio(
-        "10.43.245.250:9000",
-        access_key="minio",
-        secret_key="minio123",
-        secure=False
-    )
-    
-    minio_bucket = "mlpipeline"
-    
-    import glob
-    import os
-
-    keras.models.save_model(model,"/tmp/mnist")
-    
-    def upload_local_directory_to_minio(local_path, bucket_name, minio_path):
-        assert os.path.isdir(local_path)
-
-        for local_file in glob.glob(local_path + '/**'):
-            local_file = local_file.replace(os.sep, "/") # Replace \ with / on Windows
-            if not os.path.isfile(local_file):
-                upload_local_directory_to_minio(
-                    local_file, bucket_name, minio_path + "/" + os.path.basename(local_file))
-            else:
-                remote_path = os.path.join(
-                    minio_path, local_file[1 + len(local_path):])
-                remote_path = remote_path.replace(
-                    os.sep, "/")  # Replace \ with / on Windows
-                minio_client.fput_object(bucket_name, remote_path, local_file)
-
-    upload_local_directory_to_minio("/tmp/mnist",minio_bucket,"models/mnist/1/") # 1 for version 1
-     
-    
-    # plot metrics        
+    # Plotting metrics       
     metadata = {
         'outputs': [{
             'type': 'web-app',
@@ -165,7 +131,42 @@ def train(trained_model: OutputPath(),
 
     with open(mlpipeline_ui_metadata_path, 'w') as metadata_file:
         json.dump(metadata, metadata_file)
+    
+    # save model as artifact
+    with open(trained_model, 'wb') as model_file:
+        pickle.dump(model, model_file)
+   
+    # connect with minio object storage 
+    minio_client = Minio(
+        "10.43.245.250:9000",
+        access_key="minio",
+        secret_key="minio123",
+        secure=False
+    )
+    minio_bucket = "mlpipeline"
 
+    # This is a workaround to save the model in a directory for the Minio client to upload it
+    keras.models.save_model(model,"/tmp/mnist")
+    
+    def upload_local_directory_to_minio(local_path, bucket_name, minio_path):
+        assert os.path.isdir(local_path)
+
+        for local_file in glob.glob(local_path + '/**'):
+            local_file = local_file.replace(os.sep, "/") 
+            if not os.path.isfile(local_file):
+                upload_local_directory_to_minio(
+                    local_file, bucket_name, minio_path + "/" + os.path.basename(local_file))
+            else:
+                remote_path = os.path.join(
+                    minio_path, local_file[1 + len(local_path):])
+                remote_path = remote_path.replace(
+                    os.sep, "/")  
+                minio_client.fput_object(bucket_name, remote_path, local_file)
+
+    # upload model to minio
+    upload_local_directory_to_minio("/tmp/mnist",minio_bucket,"models/mnist/1/") # 1 for version 1
+     
+    
 
 '''
 Model evaluation
@@ -174,7 +175,6 @@ def evaluate(mlpipeline_metrics: OutputPath(),
              mnist_data: InputPath(),
              trained_model: InputPath()):
     import pickle
-    from collections import namedtuple
     import json
     
     with open(mnist_data, 'rb') as file:
@@ -258,6 +258,7 @@ def predict(mnist_data: InputPath(),
     from collections import namedtuple
     visualization_output = namedtuple('VisualizationOutput', [
         'mlpipeline_ui_metadata'])
+    
     return visualization_output(json.dumps(metadata)) 
     ####
 
@@ -273,6 +274,7 @@ def serve_model():
     from kserve import V1beta1InferenceServiceSpec
     from kserve import V1beta1PredictorSpec
     from kserve import V1beta1TFServingSpec
+    import time
 
     namespace = utils.get_default_target_namespace()
 
@@ -296,12 +298,14 @@ def serve_model():
     # Create or update the inference service
     try:
         KServe.delete(model_name)
+        time.sleep(30)
         print("Model deleted")
     except:
         print("Service does not exist yet!")
     
     KServe.create(isvc, watch=True)
 
+    print("Model created")
 load_dataset_op = create_component_from_func(
     func=load_dataset,
     packages_to_install=[],
@@ -363,8 +367,8 @@ def mnist_pipeline(
     
 if __name__ == '__main__':
     
-    from kfpv1helper import kfphelper
-    s
+    from kfpv1helper import kfphelpers
+    
     helper = kfphelpers(namespace='workshop', pl_name='mnist')
     #helper.upload_pipeline(pipeline_function=yolo_object_detection)
     helper.create_run(pipeline_function=mnist_pipeline, experiment_name='test')

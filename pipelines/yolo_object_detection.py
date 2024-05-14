@@ -1,9 +1,10 @@
 from kfp import dsl
 from kfp.components import create_component_from_func, OutputPath, InputPath
-from typing import NamedTuple
 from kfp.onprem import mount_pvc
 
-# Check if gpu/cuda is available
+'''
+Check if gpu/cuda is available
+'''
 def gpu_available_check_op():
     return dsl.ContainerOp(
         name='check gpu',
@@ -12,37 +13,69 @@ def gpu_available_check_op():
         arguments=['nvidia-smi']
     ).set_gpu_limit(2)
 
-
-# Train defined yolo model on chosen dataset
-def yolo_train(model: str = 'yolov8n.pt',
+'''
+Train defined yolo model on chosen dataset
+'''
+def yolo_train(mlpipeline_metrics: OutputPath(),
+               model: str = 'yolov8n.pt',
                data: str = 'coco128.yaml',
-               epochs: int = 3,
+               epochs: int = 5,
                batch: int = 16,
-               save_path: str ='/usr/share/example-pipeline-volume/yolo'):
-    
+               save_path: str ='/example-volume',
+               mlflow_experiment_name: str = 'yolo-example'):
+    import os
+    os.environ['MLFLOW_TRACKING_URI'] = 'http://mlflow-server:5000'
+    os.environ['MLFLOW_REGISTRY_URI'] = 'http://mlflow-server:5000'
+    os.environ['MLFLOW_EXPERIMENT_NAME'] = mlflow_experiment_name
+    import mlflow
+    import json
     from ultralytics import YOLO
     
     model = YOLO(model)
-    model.train(data=data, epochs=epochs, workers=0, project=save_path, device=[0, 1], batch=batch)
- 
+    model.train(data=data, epochs=epochs, workers=0, project=save_path+'/yolo', device=[0, 1], batch=batch)
+
+    metrics = model.val(workers=0, project=save_path+'/yolo')
     
-# Predict with best checkpoint from training on image_path/url
+    results = metrics.results_dict
+    
+    # Exports metrics for visualization in Kubeflow UI:
+    metrics = {
+      'metrics': [{
+          'name': 'Precision',
+          'numberValue':  results['metrics/precision(B)'],
+        },{
+          'name': 'Recall',
+          'numberValue':  results['metrics/recall(B)'],
+        },{
+            'name': 'MaP50',
+            'numberValue':  results['metrics/mAP50(B)'],
+        }]}
+     
+    with open(mlpipeline_metrics, 'w') as metadata_file:
+        json.dump(metrics, metadata_file)
+ 
+'''
+Predict with best checkpoint from training on image_path/url
+''' 
 def yolo_predict(prediction: OutputPath(),
                  predict_data: str = '',
-                 save_path: str ='/usr/share/example-pipeline-volume/yolo',
+                 save_path: str ='/example-volume/',
                  chkpt_path:str = '/train/weights/best.pt' # checkpoint path relative to save path
                  ):
     from ultralytics import YOLO
     import pickle
-    
-    model = YOLO(save_path + chkpt_path)
+   
+    # predict on single image 
+    model = YOLO(save_path+ '/yolo' + chkpt_path)
     pred = model(predict_data, project=save_path)  # predict on an image
     
     with open(prediction, 'wb') as outfile:
         pickle.dump(pred, outfile)
 
 
-# draws predicted bounding box on image
+''' 
+draws predicted bounding box on image and vizualizes it
+''' 
 def draw_bbox(prediction_image_path: OutputPath('png'),
               prediction: InputPath()
               ):   
@@ -87,7 +120,9 @@ def draw_bbox(prediction_image_path: OutputPath('png'),
         pickle.dump(img, outfile)
 
 
-# Visualizes image from path in 'visualize tab' 
+''' 
+Visualizes image from path in 'visualize tab' 
+''' 
 def visualize_image(image_path: InputPath(),
                     mlpipeline_ui_metadata_path: OutputPath()):
     import json
@@ -115,36 +150,16 @@ def visualize_image(image_path: InputPath(),
         json.dump(metadata, metadata_file)
 
    
-# Opens tensorboard inside the visualization tab. Only works with single tensorboard-files, not directories (??)
-def tensorboard_visualisation(mlpipeline_ui_metadata_path: OutputPath(),
-                              tb_log: str = 'log_file'):
-    import json
-    metadata = {
-        'outputs': [{
-            'type': 'tensorboard',
-            'source': tb_log 
-        }]
-    }   
-    
-    with open(mlpipeline_ui_metadata_path, 'w') as metadata_file:
-        json.dump(metadata, metadata_file)
-        
- 
 
 train_op = create_component_from_func(
     func=yolo_train,
-    packages_to_install=[],
+    packages_to_install=['mlflow'],
     base_image='ultralytics/ultralytics')
 
 predict_op = create_component_from_func(
     func=yolo_predict,
     packages_to_install=[],
     base_image='ultralytics/ultralytics')
-
-tensorboard_visualization_op = create_component_from_func(
-    func=tensorboard_visualisation,
-    packages_to_install=[],
-    base_image='python:3.9')
 
 visualize_image_op = create_component_from_func(
     func=visualize_image,
@@ -162,35 +177,34 @@ def yolo_object_detection(
      model: str = 'yolov8n.pt',
      data: str = 'coco128.yaml',
      batch:int = 32,
-     epochs: int = 60,
+     epochs: int = 5,
      predict_data: str = 'https://gitlab.com/sebastian.hocke96/example_files/-/raw/main/image_data/zebra.jpg',
+     pvc_name: str = 'workshop-volume',
+     pvc_id: str = 'pvc-3ba358a0-1019-4356-91d1-eced66032852',
+     pvc_mount_path: str = '/example-volume',
+     mlflow_experiment_name: str = 'yolo-example'
  ):   
-     RAW_VOLUME_MOUNT = mount_pvc(pvc_name= 'pvc-24243d72-e5a8-488c-aab3-3a17f979e6ed',
-                             volume_name='example-volume',
-                             volume_mount_path='/usr/share/example-pipeline-volume')
+     RAW_VOLUME_MOUNT = mount_pvc(pvc_name=pvc_name,
+                             volume_name=pvc_id,
+                             volume_mount_path=pvc_mount_path)
     
      # GPU Check
      gpu_check = gpu_available_check_op()
      
      # Yolo training task on coco dataset
-     yolo_train_task = train_op(model, data, batch, epochs,save_path ='/usr/share/example-pipeline-volume/yolo') \
+     yolo_train_task = train_op(model=model, data=data, batch=batch, epochs=epochs,save_path=pvc_mount_path, mlflow_experiment_name=mlflow_experiment_name) \
          .after(gpu_check) \
          .apply(RAW_VOLUME_MOUNT) \
          .set_gpu_limit(2)
  
      # Yolo prediction on input image
-     yolo_predict_task = predict_op(predict_data=predict_data) \
-         .after(yolo_train_task) \
-         .apply(RAW_VOLUME_MOUNT) \
-         .set_gpu_limit(2) \
-         
-     # get tensorboard example file
-     init_tensorboard_task = tensorboard_visualization_op(tb_log='/usr/share/example-pipeline-volume/example-volume/yolo/train') \
+     yolo_predict_task = predict_op(predict_data=predict_data, save_path = pvc_mount_path) \
          .after(yolo_train_task) \
          .apply(RAW_VOLUME_MOUNT) \
          
      # visualize prediction result
      draw_boundingbox_task = draw_bbox_op(prediction=yolo_predict_task.output)
+     
      visualize_image_task = visualize_image_op(image=draw_boundingbox_task.output)
 
 
@@ -202,25 +216,3 @@ if __name__ == '__main__':
     #helper.upload_pipeline(pipeline_function=yolo_object_detection)
     helper.create_run(pipeline_function=yolo_object_detection, experiment_name='test')   
     
-        
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # model = 'yolov8n.pt'
-    # epochs = 2
-    # data = 'coco128.yaml'
-    # predict_data = 'https://gitlab.com/sebastian.hocke96/example_files/-/raw/main/image_data/zebra.jpg'
-   
-    # yolo_train(model, data, epochs) 
-    # pred = yolo_predict(model, predict_data)
-    # 
