@@ -54,22 +54,22 @@ def yolo_train(model: str = 'yolov8n-seg.pt',
     # write to config file
     with open(triton_model_path / 'config.pbtxt', 'w') as f:
         f.write('''name: "brain-mri"
-                    platform: "onnxruntime_onnx"
-                    max_batch_size: 0
-                    input [
-                    {
-                      name: "images"
-                      data_type: TYPE_FP32
-                      dims: [-1,3,-1,-1]
-                    }
-                    ]
-                    output [
-                    {
-                      name: "output0"
-                      data_type: TYPE_FP32
-                      dims: [-1,-1,-1]
-                    }
-                    ]''')
+platform: "onnxruntime_onnx"
+max_batch_size: 0
+input [
+{
+  name: "images"
+  data_type: TYPE_FP32
+  dims: [-1,3,-1,-1]
+}
+]
+output [
+{
+  name: "output0"
+  data_type: TYPE_FP32
+  dims: [-1,-1,-1]
+}
+]''')
     
     values = {"onnx": str("/yolo/triton_repo/"), "model_path": str(model.trainer.best)}
     
@@ -100,7 +100,7 @@ Visualizes image from path in 'visualize tab'
 def visualize_validation_batches(image_path: str,
                                  truth_batch_name: str,
                                  pred_batch_name: str,
-                                 image_visualization: OutputPath()):
+                                 )-> NamedTuple('VisualizationOutput', [('mlpipeline_ui_metadata', 'UI_metadata')]):
     import json
     import cv2
     import os
@@ -124,9 +124,19 @@ def visualize_validation_batches(image_path: str,
     pred_batch = img_to_base64(os.path.join(image_path, pred_batch_name))
    
     html = '<!DOCTYPE html><html><body><h2>Ground truth</h2><img src='+val_batch+' alt="ground truth"></body><body><h2>Prediction</h2><img src='+pred_batch+' alt="prediction"></body></html>' 
+        
+    metadata = {
+        'outputs': [{
+            'type': 'web-app',
+            'storage': 'inline',
+            'source': html,
+        }]
+    }
+    from collections import namedtuple
+    visualization_output = namedtuple('VisualizationOutput', [
+        'mlpipeline_ui_metadata'])
     
-    with open(image_visualization, 'w') as metadata_file:
-        json.dump(html, metadata_file)
+    return visualization_output(json.dumps(metadata))
 
 '''
 Create a kserve service
@@ -143,14 +153,13 @@ def kserve_scv(model: str,
     from kserve import V1beta1InferenceServiceSpec
     from kserve import V1beta1PredictorSpec
     from kserve import V1beta1ONNXRuntimeSpec
+    import time
        
     
     model_path = model 
 
     model = 'pvc://%s' % pvc_name + model_path 
   
-    print(model)
-   
     namespace = utils.get_default_target_namespace()
    
     api_version = constants.KSERVE_GROUP + '/' + kserve_version
@@ -158,7 +167,7 @@ def kserve_scv(model: str,
     isvc = V1beta1InferenceService(api_version=api_version,
                                    kind=constants.KSERVE_KIND,
                                    metadata=client.V1ObjectMeta(
-                                       name=model_name, namespace=namespace, annotations={'sidecar.istio.io/inject':'false'}),
+                                       name=model_name, namespace=namespace, annotations={'sidecar.istio.io/inject':'false', 'nginx.ingress.kubernetes.io/proxy-body-size': '900m'}),
                                    spec=V1beta1InferenceServiceSpec(
                                    predictor=V1beta1PredictorSpec(
                                    onnx=(V1beta1ONNXRuntimeSpec(
@@ -170,6 +179,7 @@ def kserve_scv(model: str,
     # Create or update the inference service
     try:
         KServe.delete(model_name)
+        time.sleep(30)
         print("Model deleted")
     except:
         print("Service does not exist yet!")
@@ -203,7 +213,7 @@ serve_op = create_component_from_func(
 def yolo_object_detection(
     model: str = 'yolov8n-seg.yaml',
     data: str = '/usr/volume/yolo/datasets/mri_brain.yaml',
-    epochs: int = 6,
+    epochs: int = 100,
     num_gpus: int = 1,
     pvc_id: str = 'pvc-c5114187-c911-4263-8caf-30415bd0ad79',
     pvc_name: str = 'brain-mri-volume',
@@ -230,6 +240,7 @@ def yolo_object_detection(
     yolo_validation = predict_op(chkpt_path=yolo_train_task.outputs["model_path"], save_path=save_path).apply(RAW_VOLUME_MOUNT)
    
     serving_task = serve_op(model=yolo_train_task.outputs["onnx"], pvc_name=pvc_name).apply(RAW_VOLUME_MOUNT)
+    serving_task.execution_options.caching_strategy.max_cache_staleness = "P0D"
     
     # visualize some validation batches
     visualize_val = vis_op(image_path=yolo_validation.output, truth_batch_name='val_batch0_labels.jpg', pred_batch_name='val_batch0_pred.jpg').apply(RAW_VOLUME_MOUNT) # type: ignore
