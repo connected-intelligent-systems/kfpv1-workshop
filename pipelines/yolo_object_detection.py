@@ -186,7 +186,7 @@ def yolo_object_detection(
      epochs: int = 15,
      predict_data: str = 'https://gitlab.com/sebastian.hocke96/example_files/-/raw/main/image_data/zebra.jpg',
      pvc_name: str = 'kfpv1-workshop-volume',
-     pvc_id: str = 'pvc-e3074fe1-08fa-4b69-893c-43c44ca4ef92',
+     pvc_id: str = 'pvc-9d4173e6-0908-41bf-8bba-e2bbbecaa452',
      pvc_mount_path: str = '/example-volume',
      mlflow_experiment_name: str = 'yolo-example'
  ):   

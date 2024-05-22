@@ -123,7 +123,7 @@ def data_visualization(
     ):   
     
     RAW_VOLUME_MOUNT = mount_pvc(pvc_name= 'kfpv1-workshop-volume',
-                             volume_name='pvc-e3074fe1-08fa-4b69-893c-43c44ca4ef92',
+                             volume_name='pvc-9d4173e6-0908-41bf-8bba-e2bbbecaa452',
                              volume_mount_path='/usr/share/example-pipeline-volume')
     
     

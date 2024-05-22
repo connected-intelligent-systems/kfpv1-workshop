@@ -212,12 +212,12 @@ serve_op = create_component_from_func(
 @dsl.pipeline(name=PL_NAME)   
 def yolo_object_detection(
     model: str = 'yolov8n-seg.yaml',
-    data: str = '/brain-mri/notebooks_data_preparation/yolo/datasets/mri_brain.yaml',
+    data: str = '/usr/share/kfpv1-workshop/brain-mri/notebooks_data_preparation/yolo/datasets/mri_brain.yaml',
     epochs: int = 100,
     num_gpus: int = 1,
-    pvc_id: str = 'pvc-e3074fe1-08fa-4b69-893c-43c44ca4ef92',
+    pvc_id: str = 'pvc-9d4173e6-0908-41bf-8bba-e2bbbecaa452',
     pvc_name: str = 'kfpv1-workshop-volume',
-    save_path: str = '/brain-mri/notebooks_data_preparation/yolo',
+    save_path: str = '/usr/share/kfpv1-workshop/brain-mri/notebooks_data_preparation/yolo',
     image_size: int = 256,
     batch_size: int = 512,
     mosaic: float = 0.3,
@@ -249,7 +249,7 @@ def yolo_object_detection(
 if __name__ == '__main__':
     from kfpv1helper import kfphelpers
     
-    helper = kfphelpers(namespace='workshop', pl_name='yolo')
+    helper = kfphelpers(namespace='workshop', pl_name='yolo-brain-mri')
     #helper.upload_pipeline(pipeline_function=yolo_object_detection)
     helper.create_run(pipeline_function=yolo_object_detection, experiment_name='test')   
     

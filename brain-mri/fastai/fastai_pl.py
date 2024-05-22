@@ -145,9 +145,9 @@ show_prediction_op = create_component_from_func(
 @dsl.pipeline(name=PL_NAME)   
 def fastai(
     pvc_name: str = 'kfpv1-workshop-volume', 
-    pvc_id: str = 'pvc-e3074fe1-08fa-4b69-893c-43c44ca4ef92',
-    DIR_IMGS: str = '/brain-mri/notebooks_data_preparation/yolo/datasets/yolo_mri_brain/train/images',
-    DIR_MASKS: str= '/brain-mri/notebooks_data_preparation/yolo/datasets/yolo_mri_brain/train/images',
+    pvc_id: str = 'pvc-9d4173e6-0908-41bf-8bba-e2bbbecaa452',
+    DIR_IMGS: str = '/usr/share/kfpv1-workshop/brain-mri/notebooks_data_preparation/yolo/datasets/yolo_mri_brain/train/images',
+    DIR_MASKS: str= '/usr/share/kfpv1-workshop/brain-mri/notebooks_data_preparation/yolo/datasets/yolo_mri_brain/train/images',
     CODES: list = ['background', 'tumor'], 
     IMG_SIZE: int = 256, 
     BATCH_SIZE: int = 32, 
@@ -157,7 +157,7 @@ def fastai(
 ):  
     RAW_VOLUME_MOUNT = mount_pvc(pvc_name=pvc_name,
                                  volume_name=pvc_id,
-                                 volume_mount_path='') 
+                                 volume_mount_path='/usr/share') 
      
     learner = train_op(DIR_IMGS, DIR_MASKS, CODES, 
                          IMG_SIZE, BATCH_SIZE, 
