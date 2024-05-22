@@ -12,7 +12,7 @@ def multiply(value_1: float = 1.5,
     
     from typing import NamedTuple
     result = value_1 * value_2 
-    return NamedTuple('outputs', [value_1,value_2,result])
+    return [value_1,value_2,result]
 
 # Writes text to output file. OutputPath() paramater annotation produces output data as a file.
 # It passes the PATH of a file where the function writes output data and uploads it after execution.
