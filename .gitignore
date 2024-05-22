@@ -1,2 +1,4 @@
 __pycache__/
 *.pyc
+default_pipeline.yaml
+brain-mri/notebooks_data_preparation/*/
