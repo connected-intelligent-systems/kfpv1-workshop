@@ -77,4 +77,4 @@ if __name__ == '__main__':
     # Compile pipeline as .yaml.
     kfp.compiler.Compiler().compile(
         pipeline_func=test_pipeline,
-        package_path='test_pipeline.yaml')
+        package_path='default_pipeline.yaml')
