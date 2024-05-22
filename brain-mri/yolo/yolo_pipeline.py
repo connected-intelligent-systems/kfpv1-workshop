@@ -231,7 +231,7 @@ def yolo_object_detection(
     ):  
     RAW_VOLUME_MOUNT = mount_pvc(pvc_name=pvc_name,
                                  volume_name=pvc_id,
-                                 volume_mount_path='') 
+                                 volume_mount_path='/usr/share') 
      
     # Yolo training task on coco dataset
     yolo_train_task = train_op(model=model,data=data,epochs=epochs,save_path=save_path,imgsz=image_size,batch_size=batch_size,mosaic=mosaic,scale=scale,patience=patience,lr0=initial_learning_rate,lrf=final_learning_rate,optimizer=optimizer,warmup_epochs=warmup_epochs,mlflow_experiment_name=mlflow_experiment_name
