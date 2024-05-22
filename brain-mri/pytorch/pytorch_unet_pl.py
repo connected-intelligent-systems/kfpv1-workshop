@@ -1,12 +1,12 @@
 from kfp import dsl
-from kfp.dsl import Input, Output, HTML, Artifact, Model, Dataset
-from kfp import kubernetes
+from kfp.components import create_component_from_func, OutputPath, InputPath
+from typing import NamedTuple
+from kfp.onprem import mount_pvc
 
 PL_NAME = 'pytorch_unet'
 
     
-@dsl.component(base_image='harbor.foresight-next.plaiful.org/kfp-examples/ultralytics', packages_to_install=['mlflow'])
-def train_unet(TRAIN_IMG_DIR: str, TRAIN_MASK_DIR: str, VAL_IMG_DIR: str, VAL_MASK_DIR: str,
+def train_unet(TRAIN_IMG_DIR: str = '', TRAIN_MASK_DIR: str = '', VAL_IMG_DIR: str = '', VAL_MASK_DIR: str = '',
                IMG_HEIGHT: int = 256, IMG_WIDTH: int = 256, BATCH_SIZE: int = 8, NUM_WORKERS: int = 2, LEARNING_RATE: float = 1e-4,
                NUM_EPOCHS: int = 3, LOAD_MODEL: bool = False, PIN_MEMORY: bool = True, mount_path: str = ''):
     import torch
@@ -228,7 +228,8 @@ def train_unet(TRAIN_IMG_DIR: str, TRAIN_MASK_DIR: str, VAL_IMG_DIR: str, VAL_MA
             loop.set_postfix(loss=loss.item())
     
     # MlFlow setup
-    mlflow.tracking.set_tracking_uri('http://mlf-mlflow.kubeflow.svc.cluster.local:5000')
+    mlflow.tracking.set_tracking_uri('http://mlflow-server:5000')
+    mlflow.set_registry_uri('http://mlflow-server:5000')
     experiment = mlflow.set_experiment("pytorch-unet-brain-mri")
     
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu" 
@@ -278,8 +279,7 @@ def train_unet(TRAIN_IMG_DIR: str, TRAIN_MASK_DIR: str, VAL_IMG_DIR: str, VAL_MA
     )
 
     if LOAD_MODEL:
-        load_checkpoint(torch.load("my_checkpoint.pth.tar"), model)
-
+        load_checkpoint(torch.load(".my_checkpoint.pth.tar"), model)
 
     check_accuracy(val_loader, model, device=DEVICE)
     scaler = torch.cuda.amp.GradScaler()
@@ -305,16 +305,16 @@ def train_unet(TRAIN_IMG_DIR: str, TRAIN_MASK_DIR: str, VAL_IMG_DIR: str, VAL_MA
         ) 
     
 
-@dsl.component(base_image='harbor.foresight-next.plaiful.org/kfp-examples/ultralytics')
 def visualize_validation_batches(mount_path: str,
                                  truth_batch_name: str,
                                  pred_batch_name: str,
                                  original_batch_name: str,
-                                 image_visualization: Output[HTML]):
+                                 )->NamedTuple('VisualizationOutput', [('mlpipeline_ui_metadata', 'UI_metadata')]):
     import json
     import cv2
     import os
     import base64
+    from collections import namedtuple
   
 
     def encode_img(img, im_type):
@@ -338,13 +338,35 @@ def visualize_validation_batches(mount_path: str,
    
     html = '<!DOCTYPE html><html><body><h2>Ground truth</h2><img src='+val_batch+' alt="ground truth"></body><body><h2>Prediction</h2><img src='+pred_batch+' alt="prediction"></body><body><h2>Original</h2><img src='+original_batch+' alt="original"></body></html>' 
     
-    with open(image_visualization.path, 'w') as metadata_file:
-        json.dump(html, metadata_file)   
+    metadata = {
+        'outputs': [{
+            'type': 'web-app',
+            'storage': 'inline',
+            'source': html,
+        }]
+    }
+    
+    visualization_output = namedtuple('VisualizationOutput', [
+        'mlpipeline_ui_metadata'])
+    
+    return visualization_output(json.dumps(metadata))
+ 
+train_op = create_component_from_func(
+    func=train_unet,
+    packages_to_install=['mlflow', 'albumentations'],
+    base_image='pytorch/pytorch:2.3.0-cuda11.8-cudnn8-runtime')
 
+visualize_op = create_component_from_func(
+    func=visualize_validation_batches,
+    packages_to_install=['opencv-python-headless', 'psutil', 'pynvml'],
+    base_image='pytorch/pytorch:2.3.0-cuda11.8-cudnn8-runtime')
+ 
    
 @dsl.pipeline(name=PL_NAME)   
 def image_segmentation(
-    pvc_name: str = 'workshoptest-volume', 
+    pvc_name: str = 'brain-mri-volume',
+    pvc_id: str = 'pvc-c5114187-c911-4263-8caf-30415bd0ad79', 
+    mount_path: str = '/usr/share/volume',
     TRAIN_IMG_DIR: str = '/usr/share/volume/yolo/datasets/yolo_mri_brain/train/images',
     TRAIN_MASK_DIR: str = '/usr/share/volume/yolo/datasets/yolo_mri_brain/train/masks',
     VAL_IMG_DIR: str = '/usr/share/volume/yolo/datasets/yolo_mri_brain/valid/images',
@@ -354,34 +376,25 @@ def image_segmentation(
     BATCH_SIZE: int = 8, 
     NUM_WORKERS: int = 2,
     LEARNING_RATE: float = 1e-4,
-    NUM_EPOCHS: int = 3,
+    NUM_EPOCHS: int = 15,
     PIN_MEMORY: bool = True,
-    LOAD_CHECKPOINT: bool = False,
-    mount_path: str = '/usr/share/volume'
+    LOAD_MODEL: bool = False
 ):  
-
+    RAW_VOLUME_MOUNT = mount_pvc(pvc_name=pvc_name,
+                                 volume_name=pvc_id,
+                                 volume_mount_path=mount_path) 
      
-    learner = train_unet(TRAIN_IMG_DIR=TRAIN_IMG_DIR, TRAIN_MASK_DIR=TRAIN_MASK_DIR, VAL_IMG_DIR=VAL_IMG_DIR, VAL_MASK_DIR=VAL_MASK_DIR, IMG_HEIGHT=IMG_HEIGHT, 
-                         IMG_WIDTH=IMG_WIDTH, BATCH_SIZE=BATCH_SIZE, NUM_WORKERS=NUM_WORKERS, LEARNING_RATE=LEARNING_RATE, NUM_EPOCHS=NUM_EPOCHS, 
-                         LOAD_MODEL=LOAD_CHECKPOINT, PIN_MEMORY=PIN_MEMORY, mount_path=mount_path).set_accelerator_limit(1).set_accelerator_type("nvidia.com/gpu")
+    learner = train_op(TRAIN_IMG_DIR, TRAIN_MASK_DIR, VAL_IMG_DIR, VAL_MASK_DIR, IMG_HEIGHT, 
+                         IMG_WIDTH, BATCH_SIZE, NUM_WORKERS, LEARNING_RATE, NUM_EPOCHS, 
+                         LOAD_MODEL, PIN_MEMORY, mount_path).apply(RAW_VOLUME_MOUNT).set_gpu_limit(1)
 
 
-    visualize_val = visualize_validation_batches(mount_path=mount_path, truth_batch_name='pred_0.png', pred_batch_name='truth_0.png', original_batch_name='image_0.png').after(learner) # type: ignore
+    visualize_val = visualize_op(mount_path=mount_path, truth_batch_name='pred_0.png', pred_batch_name='truth_0.png', original_batch_name='image_0.png').after(learner).apply(RAW_VOLUME_MOUNT) # type: ignore
 
-    kubernetes.mount_pvc(
-        learner,
-        pvc_name=pvc_name,
-        mount_path='/usr/share/volume',
-    )
-    kubernetes.mount_pvc(
-        visualize_val,
-        pvc_name=pvc_name,
-        mount_path='/usr/share/volume',
-    )
 
 if __name__ == '__main__':
     from kfpv1helper import kfphelpers
     
     helper = kfphelpers(namespace="workshop", pl_name='pytorch_unet')
-    helper.upload_pipeline(pipeline_function=image_segmentation)
-    #helper.create_run(pipeline_function=image_segmentation) 
+    #helper.upload_pipeline(pipeline_function=image_segmentation)
+    helper.create_run(pipeline_function=image_segmentation)

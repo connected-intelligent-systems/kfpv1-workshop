@@ -61,10 +61,6 @@ def show_prediction(learner: InputPath(), DIR_IMGS: str = '', DIR_MASKS: str = '
     with open(learner, 'rb') as model_file:
         learn.load(model_file)
     plot = learn.show_results(max_n=4, figsize=[12,6], vmin=0, vmax=1, cmap=colormap())
-    print(plot)
-    print(type(plot))
-    print(dir(plot))
-    
      
     
 def train_unet(learner: OutputPath(), DIR_IMGS: str = '', DIR_MASKS: str = '', CODES: list = [], IMG_SIZE: int = 256, BATCH_SIZE: int = 16, NUM_WORKERS: int = 0, LR: float = 0.01, EPOCHS: int = 10):
@@ -125,7 +121,6 @@ def train_unet(learner: OutputPath(), DIR_IMGS: str = '', DIR_MASKS: str = '', C
     learn = unet_learner(dl, MODEL_BACKBONE, n_in=3, n_out=1, lr=LR, loss_func=BCEWithLogitsLossFlat(), metrics=[accuracy, dice, IoU])
     lrs = slice(LR/400, LR/4)
     learn.unfreeze()
-   
    
     mlflow.fastai.autolog()
 
