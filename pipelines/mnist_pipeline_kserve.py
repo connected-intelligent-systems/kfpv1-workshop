@@ -145,7 +145,7 @@ def train(trained_model: OutputPath(),
     )
     minio_bucket = "mlpipeline"
 
-    # This is a workaround to save the model in a directory for the Minio client to upload it
+    # save the model in a directory for the Minio client to upload it
     keras.models.save_model(model,"/tmp/mnist")
     
     def upload_local_directory_to_minio(local_path, bucket_name, minio_path):
@@ -179,7 +179,7 @@ def evaluate(mlpipeline_metrics: OutputPath(),
     
     with open(mnist_data, 'rb') as file:
         data = pickle.load(file)
-   
+        
     with open(trained_model, 'rb') as file:
         model = pickle.load(file)
 
@@ -187,7 +187,7 @@ def evaluate(mlpipeline_metrics: OutputPath(),
     
     test_loss, test_acc = model.evaluate(x_test, y_test) 
 
-    # Exports two sample metrics:
+    # Exports two sample metrics for dashboard vizualization
     metrics = {
       'metrics': [{
           'name': 'Accuracy',
@@ -206,11 +206,15 @@ def evaluate(mlpipeline_metrics: OutputPath(),
 Prediction on test dataset and visualization of confusion matrix
 '''
 def predict(mnist_data: InputPath(),
-            trained_model: InputPath())-> NamedTuple('VisualizationOutput', [('mlpipeline_ui_metadata', 'UI_metadata')]):
+            trained_model: InputPath(),
+            mlpipeline_ui_metadata_path: OutputPath()):
     
     import pickle
     import numpy as np
     from sklearn.metrics import confusion_matrix
+    import tensorflow as tf
+    import pandas as pd
+    import json
     
     with open(mnist_data, 'rb') as file:
         data = pickle.load(file)
@@ -224,44 +228,42 @@ def predict(mnist_data: InputPath(),
     Y_pred_classes = np.argmax(Y_pred,axis = 1) 
     Y_true = np.argmax(y_test,axis = 1)
     
-    confusion_mtx = confusion_matrix(Y_true, Y_pred_classes)
+    # generate confusion matrix
+    confusion_matrix = tf.math.confusion_matrix(labels=Y_true,predictions=Y_pred_classes)
+    confusion_matrix = confusion_matrix.numpy()
+    vocab = list(np.unique(Y_true))
+    data = []
+    for target_index, target_row in enumerate(confusion_matrix):
+        for predicted_index, count in enumerate(target_row):
+            data.append((vocab[target_index], vocab[predicted_index], count))
 
-    print(confusion_mtx.tolist())
-    print(confusion_mtx)
-
-    import pandas as pd
-    df = pd.DataFrame(confusion_mtx) #convert to a dataframe
-    cm_csv = df.to_csv(header=False, index=False)
-
-    print(cm_csv)
-    #metrics.log_confusion_matrix(['0','1','2','3','4','5','6','7','8','9'], confusion_mtx.tolist())
-    ###
-    import json
-    
+    df_cm = pd.DataFrame(data, columns=['target', 'predicted', 'count'])
+    cm_csv = df_cm.to_csv(header=False, index=False)
     metadata = {
-        'outputs' : [{
-          'type': 'confusion_matrix',
-          'format': 'csv',
-          'schema': [
-            {'name': 'target', 'type': 'CATEGORY'},
-            {'name': 'predicted', 'type': 'CATEGORY'},
-            {'name': 'count', 'type': 'NUMBER'},
-          ],
-          'target_col' : 'actual',
-          'predicted_col' : 'predicted',
-          'source': cm_csv,
-          'storage': 'inline',
-          'labels': ['0','1','2','3','4','5','6','7','8','9']
-        }]
+        "outputs": [
+            {
+                "type": "confusion_matrix",
+                "format": "csv",
+                "schema": [
+                    {'name': 'target', 'type': 'CATEGORY'},
+                    {'name': 'predicted', 'type': 'CATEGORY'},
+                    {'name': 'count', 'type': 'NUMBER'},
+                  ],
+                "target_col" : "actual",
+                "predicted_col" : "predicted",
+                "source": cm_csv,
+                "storage": "inline",
+                "labels": ['0','1','2','3','4','5','6','7','8','9']
+            }
+        ]
     }
     
-    from collections import namedtuple
-    visualization_output = namedtuple('VisualizationOutput', [
-        'mlpipeline_ui_metadata'])
-    
-    return visualization_output(json.dumps(metadata)) 
-    ####
+    with open(mlpipeline_ui_metadata_path, 'w') as metadata_file:
+        json.dump(metadata, metadata_file)
 
+'''
+Create inference service with kserve
+'''
 def serve_model():
     """
     Create kserve instance
@@ -306,6 +308,11 @@ def serve_model():
     KServe.create(isvc, watch=True)
 
     print("Model created")
+
+'''
+Functions to pipeline components
+'''
+
 load_dataset_op = create_component_from_func(
     func=load_dataset,
     packages_to_install=[],
@@ -337,7 +344,9 @@ serve_model_op = create_component_from_func(
     base_image='python:3.9')
 
 
-
+'''
+Pipeline creation
+'''
 
 @pipeline(name=PL_NAME)
 def mnist_pipeline(
@@ -361,7 +370,7 @@ def mnist_pipeline(
     eval_task = evaluate_op(mnist_data=load_dataset_task.output, trained_model=train_task.outputs['trained_model']) \
         .set_gpu_limit(1)
     serve_task = serve_model_op().after(train_task)
-    serve_task.execution_options.caching_strategy.max_cache_staleness = "P0D"
+    #serve_task.execution_options.caching_strategy.max_cache_staleness = "P0D"
    
    
     

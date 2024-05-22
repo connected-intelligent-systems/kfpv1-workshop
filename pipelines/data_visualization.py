@@ -2,7 +2,9 @@
 from kfp.components import create_component_from_func, OutputPath, InputPath
 from kfp.dsl import pipeline
 from kfp.onprem import mount_pvc
-
+'''
+Pipeline Functions
+'''
 # Downlaod data from url to a mounted volume
 def get_example_data_to_volume(url: str = 'https://gitlab.com/sebastian.hocke96/example_files/-/raw/main/tabular_data/some_metrics.csv',
                                save_path: str = '/usr/share/example-pipeline-volume/zebra.jpg'
@@ -89,7 +91,9 @@ def plot_csv_from_path(mlpipeline_ui_metadata_path: OutputPath(),
     with open(mlpipeline_ui_metadata_path, 'w') as metadata_file:
         json.dump(metadata, metadata_file)
 
-
+'''
+Functions to pipeline components
+'''
 
 get_example_data_to_volume_op = create_component_from_func(
     func=get_example_data_to_volume,
@@ -106,7 +110,9 @@ display_image_from_path_op = create_component_from_func(
     packages_to_install=['numpy','pillow','matplotlib','mpld3'],
     base_image='python:3.9')
 
-
+'''
+Pipeline creation
+'''
 
 @pipeline(name='data_viz')   
 def data_visualization(

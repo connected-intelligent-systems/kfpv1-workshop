@@ -129,10 +129,12 @@ def visualize_image(image_path: InputPath(),
     import matplotlib.pyplot as plt
     import mpld3
     import pickle
+    import numpy as np
     
     with open(image_path, 'rb') as infile:
         img = pickle.load(infile)
-    
+   
+    img = img.astype(np.uint8)
     fig = plt.figure()
     plt.imshow(img)
     
@@ -150,10 +152,12 @@ def visualize_image(image_path: InputPath(),
         json.dump(metadata, metadata_file)
 
    
-
+''' 
+Functions to pipeline components
+''' 
 train_op = create_component_from_func(
     func=yolo_train,
-    packages_to_install=['mlflow'],
+    packages_to_install=['mlflow','psutil','pynvml'],
     base_image='ultralytics/ultralytics')
 
 predict_op = create_component_from_func(
@@ -171,13 +175,15 @@ draw_bbox_op = create_component_from_func(
     packages_to_install=[],
     base_image='ultralytics/ultralytics')
 
-
+'''
+Pipeline creation
+'''
 @dsl.pipeline(name='yolo-example')   
 def yolo_object_detection(
      model: str = 'yolov8n.pt',
      data: str = 'coco128.yaml',
      batch:int = 32,
-     epochs: int = 5,
+     epochs: int = 15,
      predict_data: str = 'https://gitlab.com/sebastian.hocke96/example_files/-/raw/main/image_data/zebra.jpg',
      pvc_name: str = 'workshop-volume',
      pvc_id: str = 'pvc-3ba358a0-1019-4356-91d1-eced66032852',

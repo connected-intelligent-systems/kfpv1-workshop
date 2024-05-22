@@ -8,11 +8,11 @@ Pipeline Functions
 # Simple multiplication of two values. Annotated to return a NamedTuple containing all input values and the output value (result).
 # This is done this way to showcase handling of multiple outputs.
 def multiply(value_1: float = 1.5,
-             value_2: float = 1.5) -> float:#NamedTuple('outputs',[('value_1', float),('value_2', float),('result', float)]):
+             value_2: float = 1.5) -> NamedTuple('outputs', [('value_1', float), ('value_2', float), ('result', float)]):
     
     from typing import NamedTuple
     result = value_1 * value_2 
-    return float(result)#NamedTuple('outputs', [('value_1', float),('value_2', float),('result', float)])
+    return NamedTuple('outputs', [value_1,value_2,result])
 
 # Writes text to output file. OutputPath() paramater annotation produces output data as a file.
 # It passes the PATH of a file where the function writes output data and uploads it after execution.
@@ -61,7 +61,7 @@ def test_pipeline(
     # multiply user input
     multiply_task = multiply_op(value_1, value_2)
     # create text file
-    text_file_task = write_result_to_text_file_op(result=multiply_task.output)
+    text_file_task = write_result_to_text_file_op(result=multiply_task.outputs['result'])
     # get text file
     text_file_data_task = get_text_file_op(text=text_file_task.output)
 
@@ -70,12 +70,11 @@ if __name__ == '__main__':
     
     from kfpv1helper import kfphelpers
     
-    helper = kfphelpers(namespace='workshop', pl_name='ecample')
-    #helper.upload_pipeline(pipeline_function=yolo_object_detection)
+    helper = kfphelpers(namespace='workshop', pl_name='data-handling')
+    helper.upload_pipeline(pipeline_function=test_pipeline)
     helper.create_run(pipeline_function=test_pipeline, experiment_name='test')
         
-#    # Compile pipeline as .yaml.
-#    kfp.compiler.Compiler().compile(
-#        pipeline_func=test_pipeline,
-#        package_path='test_pipeline.yaml')
-#
+    # Compile pipeline as .yaml.
+    kfp.compiler.Compiler().compile(
+        pipeline_func=test_pipeline,
+        package_path='test_pipeline.yaml')
