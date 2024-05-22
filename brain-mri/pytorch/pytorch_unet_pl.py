@@ -364,13 +364,13 @@ visualize_op = create_component_from_func(
    
 @dsl.pipeline(name=PL_NAME)   
 def image_segmentation(
-    pvc_name: str = 'brain-mri-volume',
-    pvc_id: str = 'pvc-c5114187-c911-4263-8caf-30415bd0ad79', 
-    mount_path: str = '/usr/share/volume',
-    TRAIN_IMG_DIR: str = '/usr/share/volume/yolo/datasets/yolo_mri_brain/train/images',
-    TRAIN_MASK_DIR: str = '/usr/share/volume/yolo/datasets/yolo_mri_brain/train/masks',
-    VAL_IMG_DIR: str = '/usr/share/volume/yolo/datasets/yolo_mri_brain/valid/images',
-    VAL_MASK_DIR: str = '/usr/share/volume/yolo/datasets/yolo_mri_brain/valid/masks',
+    pvc_name: str = 'kfpv1-workshop-volume',
+    pvc_id: str = 'pvc-e3074fe1-08fa-4b69-893c-43c44ca4ef92', 
+    mount_path: str = '/',
+    TRAIN_IMG_DIR: str = '/brain-mri/notebooks_data_preparation/yolo/datasets/yolo_mri_brain/train/images',
+    TRAIN_MASK_DIR: str = '/brain-mri/notebooks_data_preparation/yolo/datasets/yolo_mri_brain/train/masks',
+    VAL_IMG_DIR: str = '/brain-mri/notebooks_data_preparation/yolo/datasets/yolo_mri_brain/valid/images',
+    VAL_MASK_DIR: str = '/brain-mri/notebooks_data_preparation/yolo/datasets/yolo_mri_brain/valid/masks',
     IMG_HEIGHT: int = 256, 
     IMG_WIDTH: int = 256, 
     BATCH_SIZE: int = 8, 

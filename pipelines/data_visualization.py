@@ -122,8 +122,8 @@ def data_visualization(
     csv_save_path: str = '/usr/share/example-pipeline-volume/data.csv' 
     ):   
     
-    RAW_VOLUME_MOUNT = mount_pvc(pvc_name= 'example-volume',
-                             volume_name='pvc-f39af9b8-9114-41c4-b9a7-bbfe843629f0',
+    RAW_VOLUME_MOUNT = mount_pvc(pvc_name= 'kfpv1-workshop-volume',
+                             volume_name='pvc-e3074fe1-08fa-4b69-893c-43c44ca4ef92',
                              volume_mount_path='/usr/share/example-pipeline-volume')
     
     
