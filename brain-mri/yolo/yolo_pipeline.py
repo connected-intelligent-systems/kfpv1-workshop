@@ -11,7 +11,7 @@ Train defined yolo model on chosen dataset
 def yolo_train(model: str = 'yolov8n-seg.pt',
                data: str = 'coco128-seg.yaml',
                epochs: int = 5,
-               save_path: str ='usr/example-pipeline-volume/yolo',
+               save_path: str ='/usr/example-pipeline-volume/yolo',
                mount_path: str = '/usr/share',
                imgsz: int = 640,
                batch_size: int = 8,
@@ -24,10 +24,8 @@ def yolo_train(model: str = 'yolov8n-seg.pt',
                warmup_epochs: float = 3.0,
                mlflow_experiment_name: str = 'ultralytics yolo')  -> NamedTuple('Outputs', [('onnx', str), ('model_path', str)]): # type: ignore
     
-    import json
     import os
     from pathlib import Path
-    import shutil
     
     os.environ['MLFLOW_TRACKING_URI'] = 'http://mlflow-server:5000'
     os.environ['MLFLOW_REGISTRY_URI'] = 'http://mlflow-server:5000'
@@ -75,7 +73,6 @@ output [
 }
 ]''')
     
-
     values = {"onnx": str(os.path.join(save_path, 'triton_repo')), "model_path": str(model.trainer.best)}
     
     from collections import namedtuple
@@ -83,17 +80,16 @@ output [
       'Outputs',
       ['onnx', 'model_path'])
     
-    return output(str(os.path.join(save_path, 'triton_repo')),str(model.trainer.best)) 
+    return output((os.path.join(save_path, 'triton_repo')),str(model.trainer.best)) 
      
     
  
-def yolo_val(chkpt_path: str, mount_path: str, save_path: str) -> NamedTuple('outputs', [('metrics', str), ('high_map_score', bool)]):
+def yolo_val(chkpt_path: str, save_path: str, mount_path: str) -> NamedTuple('outputs', [('metrics', str), ('high_map_score', bool)]):
     
     from ultralytics import YOLO
     import os
 
     save_path = os.path.join(mount_path, save_path)
-    print(save_path)
 
     # Load a model
     model = YOLO(chkpt_path)  # load a custom model
@@ -168,7 +164,6 @@ def kserve_scv(model: str,
     from kserve import V1beta1PredictorSpec
     from kserve import V1beta1ONNXRuntimeSpec
     import time
-       
     
     model_path = model 
 
@@ -227,7 +222,7 @@ serve_op = create_component_from_func(
 def yolo_object_detection(
     model: str = 'yolov8n-seg.yaml',
     data: str = 'kfpv1-workshop/brain-mri/notebooks_data_preparation/yolo/datasets/mri_brain.yaml',
-    epochs: int = 1,
+    epochs: int = 10,
     num_gpus: int = 1,
     pvc_id: str = 'pvc-9d4173e6-0908-41bf-8bba-e2bbbecaa452',
     pvc_name: str = 'kfpv1-workshop-volume',
@@ -249,10 +244,10 @@ def yolo_object_detection(
                                  volume_mount_path=mount_path) 
      
     # Yolo training task on coco dataset
-    yolo_train_task = train_op(model=model,data=data,epochs=epochs,mount_path=mount_path ,save_path=save_path,imgsz=image_size,batch_size=batch_size,mosaic=mosaic,scale=scale,patience=patience,lr0=initial_learning_rate,lrf=final_learning_rate,optimizer=optimizer,warmup_epochs=warmup_epochs,mlflow_experiment_name=mlflow_experiment_name
-                                 ).apply(RAW_VOLUME_MOUNT).set_gpu_limit(num_gpus)
+    yolo_train_task = train_op(model=model,data=data,epochs=epochs,save_path=save_path,mount_path=mount_path,imgsz=image_size,batch_size=batch_size,mosaic=mosaic,scale=scale,patience=patience,lr0=initial_learning_rate,lrf=final_learning_rate,optimizer=optimizer,warmup_epochs=warmup_epochs,mlflow_experiment_name=mlflow_experiment_name
+                                 ).apply(RAW_VOLUME_MOUNT).set_gpu_limit(1)
     
-    yolo_validation = predict_op(chkpt_path=yolo_train_task.outputs["model_path"], mount_path=mount_path, save_path=save_path).apply(RAW_VOLUME_MOUNT)
+    yolo_validation = predict_op(chkpt_path=yolo_train_task.outputs["model_path"], save_path=save_path, mount_path=mount_path).apply(RAW_VOLUME_MOUNT)
 
     with dsl.Condition(yolo_validation.outputs['high_map_score'] == True):
         serving_task = serve_op(model=yolo_train_task.outputs["onnx"], pvc_name=pvc_name).apply(RAW_VOLUME_MOUNT)
