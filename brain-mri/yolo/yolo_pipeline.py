@@ -82,7 +82,7 @@ output [
      
     
  
-def yolo_val(chkpt_path: str, save_path: str) -> str:
+def yolo_val(chkpt_path: str, save_path: str) -> NamedTuple('outputs', [('metrics', str), ('high_map_score', bool)]):
     
     from ultralytics import YOLO
 
@@ -91,8 +91,13 @@ def yolo_val(chkpt_path: str, save_path: str) -> str:
 
     # Validate the model
     metrics = model.val(workers=0, project=save_path)
-    
-    return str(metrics.save_dir) 
+
+    if metrics.results_dict['metrics/mAP50(B)'] > 0.8:
+        high_map_score = True
+    else:
+        high_map_score = False
+
+    return [str(metrics.save_dir), high_map_score] 
     
 '''
 Visualizes image from path in 'visualize tab'
@@ -238,12 +243,13 @@ def yolo_object_detection(
                                  ).apply(RAW_VOLUME_MOUNT).set_gpu_limit(1)
     
     yolo_validation = predict_op(chkpt_path=yolo_train_task.outputs["model_path"], save_path=save_path).apply(RAW_VOLUME_MOUNT)
-   
-    serving_task = serve_op(model=yolo_train_task.outputs["onnx"], pvc_name=pvc_name).apply(RAW_VOLUME_MOUNT)
-    serving_task.execution_options.caching_strategy.max_cache_staleness = "P0D"
+
+    with dsl.Condition(yolo_validation.outputs['high_map_score'] == True):
+        serving_task = serve_op(model=yolo_train_task.outputs["onnx"], pvc_name=pvc_name).apply(RAW_VOLUME_MOUNT)
+        serving_task.execution_options.caching_strategy.max_cache_staleness = "P0D"
     
     # visualize some validation batches
-    visualize_val = vis_op(image_path=yolo_validation.output, truth_batch_name='val_batch0_labels.jpg', pred_batch_name='val_batch0_pred.jpg').apply(RAW_VOLUME_MOUNT) # type: ignore
+    visualize_val = vis_op(image_path=yolo_validation.outputs['metrics'], truth_batch_name='val_batch0_labels.jpg', pred_batch_name='val_batch0_pred.jpg').apply(RAW_VOLUME_MOUNT) # type: ignore
 
 
 if __name__ == '__main__':
