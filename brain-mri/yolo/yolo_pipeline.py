@@ -97,7 +97,7 @@ def yolo_val(chkpt_path: str, save_path: str, mount_path: str) -> NamedTuple('ou
     # Validate the model
     metrics = model.val(workers=0, project=save_path)
 
-    if metrics.results_dict['metrics/mAP50(B)'] > 0:
+    if metrics.results_dict['metrics/mAP50(B)'] > 0.8:
         high_map_score = True
     else:
         high_map_score = False
