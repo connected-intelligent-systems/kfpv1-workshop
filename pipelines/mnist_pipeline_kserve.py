@@ -268,6 +268,9 @@ def serve_model():
     """
     Create kserve instance
     """
+    # For this it is necessary to create a service account for kserve and a secret with minio credentials in the same namespace.
+    # See https://kserve.github.io/website/0.7/modelserving/storage/s3/s3/
+    
     from kubernetes import client 
     from kserve import KServeClient
     from kserve import constants
