@@ -1,10 +1,3 @@
----
-title: Pipeline tutorial
-description: Tutorial on how to create Kubeflow Pipelines in Python with some examples.
-hide_table_of_contents: true
----
-
-
 # Prerequisites
 - some python experience
 - Install `kfp` in your python environment: `pip install kfp==1.8.22`
